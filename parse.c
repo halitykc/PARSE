@@ -1,176 +1,138 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <ctype.h>
-#include "../libft/libft.h"
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   quote_aware_split.c                                :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: osancak <osancak@student.42istanbul.com    +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2025/08/11 15:15:43 by hyakici           #+#    #+#             */
+/*   Updated: 2025/08/13 20:14:49 by osancak          ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
 
-typedef struct {
-    char **tokens;
-    int size;
-    int capacity;
-} TokenArray;
+#include "parser.h"
 
-void add_token(TokenArray *arr, char *token)
+void	add_token(t_token_array *arr, char *token)
 {
-    if (arr->size == arr->capacity)
-    {
-        int i; 
-        int new_cap;
-        char **new_tokens;
+	int		i;
+	int		new_cap;
+	char	**new_tokens;
 
-        new_cap = arr->capacity * 2;
-        new_tokens = malloc(new_cap * sizeof(char *));
-        i = -1;
-        while (++i < arr->size)
-            new_tokens[i] = arr->tokens[i];
-        free(arr->tokens);
-        arr->tokens = new_tokens;
-        arr->capacity = new_cap;
-    }
-    arr->tokens[arr->size++] = token;
+	if (arr->size == arr->capacity)
+	{
+		new_cap = arr->capacity * 2;
+		new_tokens = malloc(new_cap * sizeof(char *));
+		if (!new_tokens)
+			return ;
+		i = -1;
+		while (++i < arr->size)
+			new_tokens[i] = arr->tokens[i];
+		free(arr->tokens);
+		arr->tokens = new_tokens;
+		arr->capacity = new_cap;
+	}
+	arr->tokens[arr->size++] = token;
 }
 
-// Tırnakları göz önünde bulundurarak bölme 
-char **quote_aware_split(const char *input)
+static int	is_metachar(char c)
 {
-    TokenArray arr;
-    arr.size = 0;
-    arr.capacity = 10;
-    arr.tokens = malloc(arr.capacity * sizeof(char *));
-
-    int i = 0;
-    int len = ft_strlen(input);
-    while (i < len)
-    {
-        while (i < len && isspace(input[i]))
-            i++; // boşlukları atla
-
-        if (i >= len)
-            break;
-
-        char *token = NULL;
-        int start = i;
-
-        if (input[i] == '\'' || input[i] == '"')
-        {
-            char quote_char = input[i++];
-            start = i;
-            while (i < len && input[i] != quote_char)
-                i++;
-
-            int tok_len = i - start;
-            token = malloc(tok_len + 1);
-            strncpy(token, input + start, tok_len);
-            token[tok_len] = '\0';
-
-            if (i < len)
-                i++; // kapama tırnağını atla
-
-            // Tırnakları korumak için başına ve sonuna ekleyelim
-            char *with_quotes = malloc(tok_len + 3);
-            with_quotes[0] = quote_char;
-            ft_memcpy(with_quotes + 1, token, tok_len);
-            with_quotes[tok_len + 1] = quote_char;
-            with_quotes[tok_len + 2] = '\0';
-
-            free(token);
-            token = with_quotes;
-        }
-        else
-        {
-            start = i;
-            while (i < len && !isspace(input[i]) && input[i] != '\'' && input[i] != '"')
-                i++;
-
-            int tok_len = i - start;
-            token = malloc(tok_len + 1);
-            strncpy(token, input + start, tok_len);
-            token[tok_len] = '\0';
-        }
-
-        add_token(&arr, token);
-    }
-
-    add_token(&arr, NULL); // sona NULL ekle
-    return arr.tokens;
+	return (c == '|' || c == '<' || c == '>');
 }
 
-// Tırnakları boşluk varsa koruyan, yoksa kaldıran fonksiyon
-char *process_token(char *token)
+static char	*make_token(const char *input, int start, int end)
 {
-    int len = ft_strlen(token);
-    if (len < 2)
-        return ft_strdup(token);
+	char	*token;
+	int		len;
 
-    char first = token[0];
-    char last = token[len - 1];
-
-    if ((first == '\'' && last == '\'') || (first == '"' && last == '"'))
-    {
-        int has_space = 0;
-        int i = 0;
-        while (++i < len - 1)
-        {
-            if (token[i] == ' ')
-            {
-                has_space = 1;
-                break;
-            }
-        }
-
-        if (has_space)
-        {
-            // Burada özel durum kontrolü yap:
-            // Eğer dış tırnak " ve içinde ' varsa (örneğin "'ls -l'")
-            // dıştaki " kaldırılıp içtekiler kalacak
-            if (first == '"' && ft_strchr(token + 1, '\''))
-            {
-                // Dıştaki çift tırnağı kaldır
-                char *res = malloc(len - 1);
-                if (!res) return NULL;
-                ft_memcpy(res, token + 1, len - 2);
-                res[len - 2] = '\0';
-                return res;
-            }
-            // Aynı şekilde tersi durumda:
-            if (first == '\'' && ft_strchr(token + 1, '"'))
-            {
-                char *res = malloc(len - 1);
-                if (!res) return NULL;
-                ft_memcpy(res, token + 1, len - 2);
-                res[len - 2] = '\0';
-                return res;
-            }
-
-            // Normalde dıştaki tırnaklar kalacak
-            return ft_strdup(token);
-        }
-        else
-        {
-            char *res = malloc(len - 1);
-            ft_memcpy(res, token + 1, len - 2);
-            res[len - 2] = '\0';
-            return res;
-        }
-    }
-    return ft_strdup(token);
+	len = end - start;
+	token = malloc(len + 1);
+	if (!token)
+		return (NULL);
+	ft_memcpy(token, input + start, len);
+	token[len] = '\0';
+	return (token);
 }
 
-
-int main()
+static void	handle_quoted_token(t_token_array *arr, const char *input, int *i)
 {
-    char *input = "< file1 'ls' '-l' | \"'wc'\" \"'-l'\" > file2";
+	char	quote_char;
+	int		start;
+	char	*token;
 
-    char **tokens = quote_aware_split(input);
+	quote_char = input[(*i)++];
+	start = *i;
+	while (input[*i] && input[*i] != quote_char)
+		(*i)++;
+	if (start == *i)
+	{
+		if (*i > 1 && (input[*i] == '\0' || ft_isspace(input[*i - 2])))
+			add_token(arr, ft_strjoin_three(quote_char, "", quote_char));
+		if (input[*i])
+			(*i)++;
+		return ;
+	}
+	token = make_token(input, start, *i);
+	if (input[*i])
+		(*i)++;
+	add_token(arr, ft_strjoin_three(quote_char, token, quote_char));
+	free(token);
+}
 
-    for (int i = 0; tokens[i] != NULL; i++)
-    {
-        char *proc = process_token(tokens[i]);
-        printf("Orjinal: %s : TOKEN [%i]: %s\n", tokens[i], i, proc);
-        free(proc);
-        free(tokens[i]);
-    }
-    free(tokens);
+static int quotes_and_metachars(char input)
+{
+	return (input != '\'' && input != '"' && !is_metachar(input));
+}
 
-    return 0;
+static void	handle_unquoted_token(t_token_array *arr, const char *input, int *i)
+{
+	int		start;
+	char	*token;
+
+	start = *i;
+	while (input[*i] && !ft_isspace(input[*i]) && quotes_and_metachars(input[*i]))
+		(*i)++;
+	token = make_token(input, start, *i);
+	add_token(arr, token);
+}
+
+char	**quote_aware_split(const char *input)
+{
+	t_token_array	arr;
+	int				i;
+	int				len;
+
+	init_token(&arr);
+	i = 0;
+	len = ft_strlen(input);
+	while (i < len)
+	{
+		while (i < len && ft_isspace(input[i]))
+			i++;
+		if (i >= len)
+			return (NULL);
+		if (input[i] == '\'' || input[i] == '"')
+			handle_quoted_token(&arr, input, &i);
+		else if (is_metachar(input[i]))
+		{
+			if (input[i] == '<' && input[i + 1] == '<')
+			{
+				add_token(&arr, make_token(input, i, i + 2));
+				i += 2;
+			}
+			else if (input[i] == '>' && input[i + 1] == '>')
+			{
+				add_token(&arr, make_token(input, i, i + 2));
+				i += 2;
+			}
+			else
+			{
+				add_token(&arr, make_token(input, i, i + 1));
+				i++;
+			}			
+		}
+		else
+			handle_unquoted_token(&arr, input, &i);
+	}
+	add_token(&arr, NULL);
+	return (arr.tokens);
 }
